@@ -494,15 +494,26 @@ function readSheet(data){
   // 표가 시트 어디에 있어도 찾는다. 이름이 붙은 열만 골라내고,
   // 그중 첫째를 라운드 이름 열, 나머지를 팀 열로 본다.
   const t = data.table;
+  let body = (t.rows || []).slice();
+  let labels = t.cols.map(c => (c && c.label || "").trim());
+  // 구글이 첫 줄을 머리글로 못 알아볼 때가 있다(점수 칸이 전부 비어 열이 문자열로 잡힐 때).
+  // 그러면 첫 줄에 숫자가 아닌 글자 칸이 둘 이상이면 그 줄을 머리글로 쓰고 본문에서 뺀다.
+  if(!labels.some(Boolean) && body.length){
+    const first = (body[0].c || []).map(c => c && c.v != null ? String(c.v).trim() : "");
+    if(first.filter(v => v && isNaN(parseFloat(v))).length >= 2){
+      labels = first;
+      body = body.slice(1);
+    }
+  }
   let used = [];
-  t.cols.forEach((c, i) => { if((c && c.label || "").trim()) used.push(i); });
+  labels.forEach((l, i) => { if(l) used.push(i); });
   if(used.length < 2) used = t.cols.map((_, i) => i);   // 머리글이 없으면 순서대로
   const roundCol = used[0];
   const teamCols = used.slice(1, 1 + TEAMS.length);
-  const names = teamCols.map(i => (t.cols[i].label || "").trim());
+  const names = teamCols.map(i => (labels[i] || "").trim());
 
   const rows = [];
-  (t.rows || []).forEach(r => {
+  body.forEach(r => {
     const c = r.c || [];
     const vals = teamCols.map(i => cellNum(c[i]));
     const rl = c[roundCol];
