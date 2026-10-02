@@ -468,7 +468,7 @@ let sheetSeq = 0;
 function sheetUrl(){
   const cb = "__sheetData" + (++sheetSeq);
   const u = "https://docs.google.com/spreadsheets/d/" + encodeURIComponent(SHEET) +
-            "/gviz/tq?tqx=out:json;responseHandler:" + cb + "&t=" + Date.now();
+            "/gviz/tq?tqx=out:json;responseHandler:" + cb + "&headers=1&t=" + Date.now();   // headers=1: 첫 줄을 반드시 머리글로 읽는다. 점수 칸이 수식이어도 열 이름 추정이 흔들리지 않는다
   return {url: u, cb};
 }
 function fetchSheet(){
