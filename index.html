@@ -465,6 +465,7 @@ let sound = true;
 const SHEET = new URLSearchParams(location.search).get("sheet");
 let sheetSeq = 0;
 let sheetSeen = null;   // 직전에 읽었을 때 확정돼 있던 시트 행 번호들
+let tags = [];          // 시트 연결 때 보이는 라운드마다 {chip, head, num}. 「보너스」 행은 게임 번호에서 빼고 따로 표시한다
 
 function sheetUrl(){
   const cb = "__sheetData" + (++sheetSeq);
@@ -525,15 +526,15 @@ function readSheet(data){
   const teamCols = used.slice(1, 1 + TEAMS.length);
   const names = teamCols.map(i => (labels[i] || "").trim());
 
-  const rows = [];
+  const rows = [], rowLabels = [];
   body.forEach(r => {
     const c = r.c || [];
     const vals = teamCols.map(i => cellNum(c[i]));
     const rl = c[roundCol];
     const named = rl != null && rl.v != null && String(rl.v).trim() !== "";
-    if(named || vals.some(v => v !== 0)) rows.push(vals);
+    if(named || vals.some(v => v !== 0)){ rows.push(vals); rowLabels.push(named ? String(rl.v).trim() : ""); }
   });
-  return {names: names.filter(Boolean), rows};
+  return {names: names.filter(Boolean), rows, rowLabels};
 }
 function applySheet(d){
   if(!d.rows.length) return;
@@ -552,6 +553,18 @@ function applySheet(d){
   rounds = played.length
     ? played.map(i => TEAMS.map((_, t) => d.rows[i][t] || 0))
     : [TEAMS.map(() => 0)];
+  // 라벨이 「보너스」로 시작하는 행은 게임 라운드 번호를 쓰지 않는다. 게임 번호가 보너스 때문에 밀리지 않게 한다.
+  let g = 0, b = 0;
+  const nb = played.filter(i => /^보너스/.test((d.rowLabels || [])[i] || "")).length;
+  tags = played.map(i => {
+    if(/^보너스/.test((d.rowLabels || [])[i] || "")){
+      b++;
+      const name = "보너스" + (nb > 1 ? " " + b : "");
+      return {chip: name, head: name, num: "B" + (nb > 1 ? b : "")};
+    }
+    g++;
+    return {chip: "R" + g, head: "Round " + g, num: String(g)};
+  });
   // 지금 라운드는 이번에 새로 확정된 행이다. 순서를 바꿔 치러도 방금 확정한 게임이 뜬다.
   // 처음 열 때나 확정을 푼 행이 있으면 마지막 행으로 돌아간다.
   const fresh = sheetSeen ? played.filter(i => !sheetSeen.includes(i)) : [];
@@ -706,6 +719,10 @@ TEAMS.forEach((name, t) => {
 });
 const slots = [...board.children];
 
+// 라운드 표시 이름. 시트 연결 때는 applySheet 가 만든 tags 를, 수동 입력 때는 순서 번호를 쓴다.
+function tagOf(i){
+  return (SHEET && tags[i]) || {chip: "R" + (i + 1), head: "Round " + (i + 1), num: String(i + 1)};
+}
 function render(bumped){
   const places = rankOf(shown);
   const top = Math.max(...TEAMS.map((_, t) => shown(t)));
@@ -731,21 +748,21 @@ function render(bumped){
       b.setAttribute("aria-label", TEAMS[t] + (minus ? " 감점 " : " 가점 ") + v);
     });
     el.querySelector(".vlabel").textContent =
-      view === "total" ? "합계" : "Round " + (cur + 1);
+      view === "total" ? "합계" : tagOf(cur).head;
     const box = el.querySelector(".rounds");
     box.innerHTML = "";
     rounds.forEach((r, i) => {
       const c = document.createElement("span");
       c.className = "chip" + (i === cur ? " now" : "");
-      c.textContent = "R" + (i + 1) + " " + r[t];
+      c.textContent = tagOf(i).chip + " " + r[t];
       box.appendChild(c);
     });
   });
 
-  document.getElementById("rNow").textContent = cur + 1;
+  document.getElementById("rNow").textContent = tagOf(cur).num;
   document.getElementById("rPrev").disabled = cur === 0;
   document.getElementById("undo").disabled = history.length === 0;
-  const head = "Round " + (cur + 1) + (SHEET ? "" : " / " + rounds.length) +
+  const head = tagOf(cur).head + (SHEET ? "" : " / " + rounds.length) +
                " · 보기 " + (view === "total" ? "합계" : "이번 라운드");
   document.getElementById("status").textContent = SHEET
     ? head + " · T 보기전환"
